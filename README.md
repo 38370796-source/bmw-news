@@ -11,29 +11,27 @@
 
 ## 快速开始
 
-### 1. 配置
-
 ```bash
+# 1. 克隆仓库
+git clone https://github.com/38370796-source/bmw-news.git
+cd bmw-news
+
+# 2. 配置 API Key
 cp .env.example .env
-# 编辑 .env，填入你的 LLM_API_KEY
+# 编辑 .env，填入你的 LLM_API_KEY（去 https://platform.deepseek.com 免费注册获取）
+# 如果在国内无需代理访问 Bloomberg，删掉 HTTP_PROXY 那行即可
+
+# 3. 启动
+docker compose up --build
 ```
 
-### 2. 运行
+### 非 Docker 方式
 
 ```bash
-# Docker Compose（推荐）
-docker compose up --build
-
-# 或直接用 Python（需 Python 3.13+）
 pip install -r requirements.txt
 LLM_API_KEY=your_key python bloomberg_crawler.py
 ```
-
-### 3. 查看结果
-
-简报输出在 `output/` 目录：
-- `bloomberg_asia_brief_cn.md` — 双语 Markdown 简报
-- `bloomberg_asia_brief_cn.json` — JSON 结构化数据
+> 需要 Python 3.13+
 
 ## 环境变量
 
