@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Environment
+.env
+.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Output
+output/
+*.md
+
+# macOS
+.DS_Store

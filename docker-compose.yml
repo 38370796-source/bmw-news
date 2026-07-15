@@ -1,0 +1,25 @@
+services:
+  bloomberg-crawler:
+    build: .
+    container_name: bmw-news
+    environment:
+      # 必需：LLM API Key（支持 OpenAI 兼容接口，推荐 DeepSeek）
+      - LLM_API_KEY=${LLM_API_KEY}
+      # 可选：自定义 LLM 配置
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.deepseek.com}
+      - LLM_MODEL=${LLM_MODEL:-deepseek-chat}
+      - BATCH_SIZE=${BATCH_SIZE:-15}
+      # 可选：代理配置（如需通过代理访问 Bloomberg）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      # 可选：自定义 URL 和输出目录
+      - BLOOMBERG_URL=${BLOOMBERG_URL:-https://www.bloomberg.com/asia}
+      - OUTPUT_DIR=/app/output
+    volumes:
+      # 挂载输出目录，方便查看简报
+      - ./output:/app/output
+      # 缓存 crawl4ai 数据，加速重复运行
+      - crawl4ai_cache:/app/.crawl4ai
+
+volumes:
+  crawl4ai_cache:
