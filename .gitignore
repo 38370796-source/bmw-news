@@ -34,8 +34,5 @@ output/
 # Docker 缓存
 .crawl4ai/
 
-# WorkBuddy（仅排除内部数据，保留技能目录）
-.workbuddy/*
-!.workbuddy/skills/
-.workbuddy/skills/*
-!.workbuddy/skills/bloomberg-news-brief/
+# WorkBuddy
+.workbuddy/
