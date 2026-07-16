@@ -394,13 +394,14 @@ async def main():
 
     # Phase 4: 输出
     crawl_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    file_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     brief_md = format_bilingual_brief(all_processed, crawl_time, TARGET_URLS)
 
-    md_path = OUTPUT_DIR / "news_brief_cn.md"
+    md_path = OUTPUT_DIR / f"news_brief_cn_{file_ts}.md"
     md_path.write_text(brief_md, encoding="utf-8")
     print(f"✅ 双语简报: {md_path}")
 
-    json_path = OUTPUT_DIR / "news_brief_cn.json"
+    json_path = OUTPUT_DIR / f"news_brief_cn_{file_ts}.json"
     json_path.write_text(
         json.dumps(all_processed, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -408,7 +409,6 @@ async def main():
     print(f"✅ JSON 数据: {json_path}")
 
     elapsed = time.time() - start_time
-    print(f"\n⏱ 总耗时: {elapsed:.1f}s")
     print(f"\n⏱ 总耗时: {elapsed:.1f}s")
     print(f"📄 简报文件在 output/ 目录下")
 
