@@ -44,6 +44,53 @@ LLM_API_KEY=your_key python bloomberg_crawler.py
 | `BLOOMBERG_URL` | - | `https://www.bloomberg.com/asia` | 目标 URL |
 | `BATCH_SIZE` | - | `15` | 每批 LLM 处理数量 |
 
+
+##使用方式
+
+根据你执行的 docker compose up --build 命令，输出内容会以两种方式呈现，你可以按以下步骤查看：
+
+方式一：直接查看终端实时输出（最快）
+
+当你运行 docker compose up --build 后，终端会实时打印爬虫和AI生成的进度及结果。
+最终生成的Markdown格式双语简报会直接显示在终端日志里，你可以直接翻阅终端内容查看。
+
+方式二：查看生成的文件（持久化保存）
+
+程序运行结束后，会在你当前的 bmw-news 目录下生成两个输出文件：
+1. Markdown简报（方便阅读）：output_YYYY-MM-DD_HH-MM-SS.md
+   （文件名带时间戳，例如 output_2026-07-16_10-30-25.md）
+2. JSON数据（方便程序处理）：output_YYYY-MM-DD_HH-MM-SS.json
+
+👉 查看方法：
+在 bmw-news 目录下直接列出文件：
+ls -l output_*.md output_*.json
+
+用编辑器打开查看（以VS Code为例）：
+code output_2026-07-16_*.md  # 替换为实际文件名
+
+或用命令行查看：
+cat output_2026-07-16_*.md
+
+
+💡 补充说明
+
+1. 为什么找不到文件？
+   • 如果终端最后没有显示 Generating report... 之类的日志，可能是爬虫失败（如网络问题、Bloomberg反爬）。请检查终端是否有报错（红色错误日志）。
+
+   • 如果使用了代理，请确保 .env 中的 HTTP_PROXY 填写正确。
+
+2. 想重新运行？
+   停止当前容器（Ctrl+C），然后再次运行：
+   docker compose up
+   
+   （不需要再加 --build，除非你修改了代码）
+
+3. 非Docker方式输出位置相同
+   如果你后来尝试了非Docker方式（python bloomberg_crawler.py），文件同样生成在当前目录。
+
+需要我帮你解读终端里的报错日志吗？
+
+
 ## 输出示例
 
 ```markdown
