@@ -45,7 +45,7 @@ LLM_API_KEY=your_key python bloomberg_crawler.py
 | `BATCH_SIZE` | - | `15` | 每批 LLM 处理数量 |
 
 
-##使用方式
+## 使用方式
 
 根据你执行的 docker compose up --build 命令，输出内容会以两种方式呈现，你可以按以下步骤查看：
 
