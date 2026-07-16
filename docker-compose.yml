@@ -9,7 +9,8 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.deepseek.com}
       - LLM_MODEL=${LLM_MODEL:-deepseek-chat}
       - BATCH_SIZE=${BATCH_SIZE:-15}
-      # 可选：代理配置（如需通过代理访问 Bloomberg）
+      # 可选：代理配置（如需通过代理访问 Bloomberg，设置 USE_PROXY=true）
+      - USE_PROXY=${USE_PROXY:-false}
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       # 可选：自定义 URL 和输出目录

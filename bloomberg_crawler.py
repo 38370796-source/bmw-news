@@ -27,6 +27,7 @@ from openai import OpenAI
 
 # ========== 配置 ==========
 PROXY = os.environ.get("HTTP_PROXY", os.environ.get("HTTPS_PROXY", "http://127.0.0.1:7890"))
+USE_PROXY = os.environ.get("USE_PROXY", "true").lower() in ("true", "1", "yes")
 TARGET_URL = os.environ.get("BLOOMBERG_URL", "https://www.bloomberg.com/asia")
 BASE_URL = "https://www.bloomberg.com"
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", str(Path(__file__).parent / "output")))
@@ -280,16 +281,17 @@ async def main():
     print("=" * 60)
     print("  Bloomberg Asia 双语新闻简报生成器 v3")
     print(f"  目标: {TARGET_URL}")
-    print(f"  代理: {PROXY}")
+    print(f"  代理: {PROXY if USE_PROXY else '(禁用)'}")
     print(f"  LLM:  {LLM_MODEL}")
     print("=" * 60)
     print()
 
     # Phase 1: 爬取
     print("🔄 Phase 1: 爬取 Bloomberg Asia 首页...")
+    proxy_cfg = ProxyConfig(server=PROXY) if USE_PROXY else None
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
-        proxy_config=ProxyConfig(server=PROXY),
+        proxy_config=proxy_cfg,
     )
 
     async with AsyncWebCrawler(
