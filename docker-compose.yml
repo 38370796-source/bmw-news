@@ -13,8 +13,8 @@ services:
       - USE_PROXY=${USE_PROXY:-true}
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
-      # 新闻网址（逗号分隔，可自定义多个来源）
-      - NEWS_URLS=${NEWS_URLS:-https://www.bloomberg.com/asia,https://www.cnbc.com/world/?region=world}
+      # 新闻网址在 .env 的 NEWS_URLS 中配置
+      - NEWS_URLS=${NEWS_URLS}
       - OUTPUT_DIR=/app/output
     volumes:
       # 挂载输出目录，方便查看简报
