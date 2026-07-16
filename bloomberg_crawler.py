@@ -26,8 +26,8 @@ from crawl4ai.async_crawler_strategy import AsyncHTTPCrawlerStrategy
 from openai import OpenAI
 
 # ========== 配置 ==========
-PROXY = os.environ.get("HTTP_PROXY", os.environ.get("HTTPS_PROXY", "http://127.0.0.1:7890"))
-USE_PROXY = os.environ.get("USE_PROXY", "true").lower() in ("true", "1", "yes")
+PROXY = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY") or ""
+USE_PROXY = os.environ.get("USE_PROXY", "false").lower() in ("true", "1", "yes")
 TARGET_URL = os.environ.get("BLOOMBERG_URL", "https://www.bloomberg.com/asia")
 BASE_URL = "https://www.bloomberg.com"
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", str(Path(__file__).parent / "output")))
