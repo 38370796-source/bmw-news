@@ -12,7 +12,7 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 # 设置 crawl4ai 数据目录
 CRAWL4AI_DIR = Path(__file__).parent / ".crawl4ai"
@@ -28,8 +28,12 @@ from openai import OpenAI
 # ========== 配置 ==========
 PROXY = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY") or "http://127.0.0.1:7890"
 USE_PROXY = os.environ.get("USE_PROXY", "true").lower() in ("true", "1", "yes")
-TARGET_URL = os.environ.get("BLOOMBERG_URL", "https://www.bloomberg.com/asia")
-BASE_URL = "https://www.bloomberg.com"
+TARGET_URLS = [
+    u.strip() for u in os.environ.get(
+        "NEWS_URLS",
+        "https://www.bloomberg.com/asia,https://www.cnbc.com/world/?region=world"
+    ).split(",") if u.strip()
+]
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", str(Path(__file__).parent / "output")))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -42,24 +46,29 @@ BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "15"))
 # ========== Bloomber 爬取 ==========
 
 
-def normalize_url(url: str) -> str:
+def normalize_url(url: str, base_url: str = "") -> str:
     if not url:
         return ""
     url = url.strip()
     if url.startswith("//"):
         return "https:" + url
+    if url.startswith("/") and base_url:
+        return urljoin(base_url, url)
     if url.startswith("/"):
-        return BASE_URL + url
+        return url
     if not url.startswith("http"):
-        return urljoin(BASE_URL + "/", url)
+        return "https://" + url
     return url
 
 
-def parse_bloomberg_markdown(markdown: str) -> list[dict]:
-    """从 crawl4ai 的 Markdown 输出中提取新闻条目"""
+def parse_news_markdown(markdown: str, source_domain: str = "") -> list[dict]:
+    """从 crawl4ai 的 Markdown 输出中提取新闻条目（多域名通用）"""
     items = []
     seen_urls = set()
     lines = markdown.split("\n")
+
+    # 已知图片 CDN 域名
+    IMG_CDNS = {"assets.bwbx.io", "image.cnbcfm.com", "static01.nyt.com", "cdn.cnn.com"}
 
     link_pattern = re.compile(r'\[([^\]]*?)\]\((https?://[^\s)]+)\)')
 
@@ -70,10 +79,14 @@ def parse_bloomberg_markdown(markdown: str) -> list[dict]:
 
         matches = link_pattern.findall(line)
         for text, url in matches:
-            if "assets.bwbx.io" in url:
+            # 跳过图片 CDN 链接
+            if any(cdn in url for cdn in IMG_CDNS):
                 continue
-            if "/news/" not in url:
+            # 跳过明显不是新闻内容的 URL
+            parsed = urlparse(url)
+            if parsed.path in ("/", "") or len(parsed.path) < 3:
                 continue
+
             if text.strip().isdigit() or re.match(r'^\d+:\d+$', text.strip()):
                 continue
             if len(text.strip()) < 5:
@@ -84,12 +97,16 @@ def parse_bloomberg_markdown(markdown: str) -> list[dict]:
                 continue
             seen_urls.add(normalized)
 
-            article_type = "video" if "/news/videos/" in url else "article"
+            # 判断类型
+            if "/videos/" in url or "/video/" in url:
+                article_type = "video"
+            else:
+                article_type = "article"
 
             headline = text.strip()
             headline = re.sub(r'!\[.*?\]\(.*?\)', '', headline).strip()
-            headline = re.sub(r'^(Video|Opinion|Analysis|Exclusive|Watch|Listen)\s*[:\-]?\s*', '', headline)
-            headline = re.sub(r'^\d+:\d+\s*', '', headline)
+            headline = re.sub(r'^(Video|Opinion|Analysis|Exclusive|Watch|Listen|SPONSORED)\s*[:\-]?\s*', '', headline, flags=re.IGNORECASE)
+            headline = re.sub(r'^\d+:?\d*\s*', '', headline)
             headline = re.sub(r'^Newsletter:\s*', '', headline)
             headline = ' '.join(headline.split())
 
@@ -102,19 +119,21 @@ def parse_bloomberg_markdown(markdown: str) -> list[dict]:
                 idx = i + offset
                 if 0 <= idx < len(lines):
                     ctx = lines[idx].strip()
-                    if ctx and "assets.bwbx.io" not in ctx and "bloomberg.com" not in ctx:
-                        ctx = re.sub(r'!\[.*?\]\(.*?\)', '', ctx).strip()
-                        ctx = re.sub(r'\[.*?\]\(.*?\)', '', ctx).strip()
-                        if len(ctx) > 20 and not ctx.startswith("###"):
-                            summary = ctx
-                            break
+                    if ctx and not any(cdn in ctx for cdn in IMG_CDNS):
+                        has_url = bool(re.search(r'https?://', ctx))
+                        if not has_url:
+                            ctx = re.sub(r'!\[.*?\]\(.*?\)', '', ctx).strip()
+                            ctx = re.sub(r'\[.*?\]\(.*?\)', '', ctx).strip()
+                            if len(ctx) > 20 and not ctx.startswith("###"):
+                                summary = ctx
+                                break
 
             items.append({
                 "headline": headline,
                 "url": normalized,
                 "type": article_type,
+                "source": source_domain,
                 "summary": summary[:300],
-                "raw_line": line[:200],
             })
 
     return items
@@ -225,16 +244,24 @@ async def llm_process_batch(client: OpenAI, items: list[dict], batch_id: int) ->
 
 # ========== 格式化输出 ==========
 
-def format_bilingual_brief(all_items: list[dict], crawl_time: str) -> str:
+def format_bilingual_brief(all_items: list[dict], crawl_time: str, urls: list[str]) -> str:
     """格式化为中英双语简报"""
     articles = [i for i in all_items if i["type"] == "article"]
     videos = [i for i in all_items if i["type"] == "video"]
 
+    # 统计各来源
+    sources = {}
+    for item in all_items:
+        s = item.get("source", "未知")
+        sources[s] = sources.get(s, 0) + 1
+    source_summary = "、".join(f"{k}({v})" for k, v in sources.items())
+
     lines = [
-        "# 📰 Bloomberg Asia 双语新闻简报",
+        "# 📰 多源新闻双语简报",
         f"**抓取时间**: {crawl_time}",
-        f"**来源**: {TARGET_URL}",
+        f"**来源**: {', '.join(urls)}",
         f"**共 {len(all_items)} 条**（文章 {len(articles)} 篇 + 视频 {len(videos)} 个）",
+        f"**来源分布**: {source_summary}",
         "",
         "---",
         "",
@@ -279,52 +306,70 @@ async def main():
     start_time = time.time()
 
     print("=" * 60)
-    print("  Bloomberg Asia 双语新闻简报生成器 v3")
-    print(f"  目标: {TARGET_URL}")
+    print("  多源新闻双语简报生成器 v4")
+    print(f"  目标: {len(TARGET_URLS)} 个网址")
+    for u in TARGET_URLS:
+        print(f"    - {u}")
     print(f"  代理: {PROXY if USE_PROXY else '(禁用)'}")
     print(f"  LLM:  {LLM_MODEL}")
     print("=" * 60)
     print()
 
-    # Phase 1: 爬取
-    print("🔄 Phase 1: 爬取 Bloomberg Asia 首页...")
     proxy_cfg = ProxyConfig(server=PROXY) if USE_PROXY else None
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         proxy_config=proxy_cfg,
     )
 
+    all_items = []
+
     async with AsyncWebCrawler(
         verbose=True,
         crawler_strategy=AsyncHTTPCrawlerStrategy(),
     ) as crawler:
-        result = await crawler.arun(url=TARGET_URL, config=run_config)
+        for url in TARGET_URLS:
+            domain = urlparse(url).netloc
+            print(f"🔄 Phase 1: 爬取 {domain} ...")
+            try:
+                result = await crawler.arun(url=url, config=run_config)
+            except Exception as e:
+                print(f"  ❌ {domain} 爬取失败: {e}")
+                continue
 
-    if not result.success:
-        print(f"❌ 请求失败: {result.error_message}")
+            if not result.success:
+                print(f"  ❌ {domain} 请求失败: {result.error_message}")
+                continue
+
+            print(f"  ✅ {domain} 爬取成功 (MD: {len(result.markdown or '')} 字符)")
+
+            # Phase 2: 解析
+            print(f"  🔍 解析 {domain} Markdown...")
+            items = parse_news_markdown(result.markdown or "", source_domain=domain)
+
+            # 去重
+            unique = {item["url"]: item for item in items}
+            items = list(unique.values())
+            print(f"  📊 {domain}: {len(items)} 条")
+            all_items.extend(items)
+            print()
+
+    if not all_items:
+        print("❌ 所有来源均未提取到新闻")
         return
 
-    print(f"✅ 爬取成功 (HTML: {len(result.html or '')} 字符, MD: {len(result.markdown or '')} 字符)")
-    print()
+    # 全局去重
+    unique_all = {item["url"]: item for item in all_items}
+    all_items = list(unique_all.values())
 
-    # Phase 2: 解析
-    print("🔍 Phase 2: 解析 Markdown 提取新闻...")
-    items = parse_bloomberg_markdown(result.markdown or "")
-
-    # 去重
-    unique = {item["url"]: item for item in items}
-    items = list(unique.values())
-
-    articles = [i for i in items if i["type"] == "article"]
-    videos = [i for i in items if i["type"] == "video"]
-
-    print(f"📊 提取: {len(items)} 条（文章 {len(articles)} + 视频 {len(videos)}）")
+    articles = [i for i in all_items if i["type"] == "article"]
+    videos = [i for i in all_items if i["type"] == "video"]
+    print(f"📊 汇总: {len(all_items)} 条（文章 {len(articles)} + 视频 {len(videos)}）")
     print()
 
     # Phase 3: LLM 翻译生成
     if not LLM_API_KEY:
-        print("⚠️ 未设置 OPENAI_API_KEY / DEEPSEEK_API_KEY，跳过 LLM 翻译，仅输出英文标题")
-        all_processed = items
+        print("⚠️ 未设置 LLM_API_KEY，跳过 LLM 翻译，仅输出英文标题")
+        all_processed = all_items
     else:
         print("🤖 Phase 3: LLM 双语翻译 + 摘要生成...")
         client = OpenAI(
@@ -334,16 +379,14 @@ async def main():
 
         all_processed = []
 
-        # 分批处理
-        for batch_idx in range(0, len(items), BATCH_SIZE):
-            batch = items[batch_idx:batch_idx + BATCH_SIZE]
+        for batch_idx in range(0, len(all_items), BATCH_SIZE):
+            batch = all_items[batch_idx:batch_idx + BATCH_SIZE]
             batch_id = batch_idx // BATCH_SIZE + 1
 
             processed_batch = await llm_process_batch(client, batch, batch_id)
             all_processed.extend(processed_batch)
 
-            # 请求间短暂延迟
-            if batch_idx + BATCH_SIZE < len(items):
+            if batch_idx + BATCH_SIZE < len(all_items):
                 await asyncio.sleep(1)
 
         print(f"✅ LLM 处理完成 ({len(all_processed)} 条)")
@@ -351,13 +394,13 @@ async def main():
 
     # Phase 4: 输出
     crawl_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    brief_md = format_bilingual_brief(all_processed, crawl_time)
+    brief_md = format_bilingual_brief(all_processed, crawl_time, TARGET_URLS)
 
-    md_path = OUTPUT_DIR / "bloomberg_asia_brief_cn.md"
+    md_path = OUTPUT_DIR / "news_brief_cn.md"
     md_path.write_text(brief_md, encoding="utf-8")
     print(f"✅ 双语简报: {md_path}")
 
-    json_path = OUTPUT_DIR / "bloomberg_asia_brief_cn.json"
+    json_path = OUTPUT_DIR / "news_brief_cn.json"
     json_path.write_text(
         json.dumps(all_processed, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -365,6 +408,7 @@ async def main():
     print(f"✅ JSON 数据: {json_path}")
 
     elapsed = time.time() - start_time
+    print(f"\n⏱ 总耗时: {elapsed:.1f}s")
     print(f"\n⏱ 总耗时: {elapsed:.1f}s")
     print(f"📄 简报文件在 output/ 目录下")
 

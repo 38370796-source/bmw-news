@@ -13,8 +13,8 @@ services:
       - USE_PROXY=${USE_PROXY:-true}
       - HTTP_PROXY=${HTTP_PROXY:-http://127.0.0.1:7890}
       - HTTPS_PROXY=${HTTPS_PROXY:-http://127.0.0.1:7890}
-      # 可选：自定义 URL 和输出目录
-      - BLOOMBERG_URL=${BLOOMBERG_URL:-https://www.bloomberg.com/asia}
+      # 新闻网址（逗号分隔，可自定义多个来源）
+      - NEWS_URLS=${NEWS_URLS:-https://www.bloomberg.com/asia,https://www.cnbc.com/world/?region=world}
       - OUTPUT_DIR=/app/output
     volumes:
       # 挂载输出目录，方便查看简报
