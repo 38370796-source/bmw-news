@@ -88,8 +88,6 @@ cat output_2026-07-16_*.md
 3. 非Docker方式输出位置相同
    如果你后来尝试了非Docker方式（python bloomberg_crawler.py），文件同样生成在当前目录。
 
-需要我帮你解读终端里的报错日志吗？
-
 
 ## 输出示例
 
